@@ -171,6 +171,7 @@ HTML_LAYOUT = """
 def index():
     summary = "Hello! Upload your lecture slide files or note screenshots inside the bottom command pill bar, append an action prompt command, and execute to initialize operations."
     has_summary = "False"
+    
     if request.method == "POST":
         slide_files = request.files.getlist("slide_images")
         extra_prompt = request.form.get("extra_prompt", "")
@@ -178,12 +179,11 @@ def index():
         
         for file in slide_files:
             if file and file.filename != '':
-                gemini_payload.append({
-                    "mime_type": file.content_type,
-                    "data": base64.b64encode(file.read()).decode("utf-8")
-                })
+                file_data = base64.b64encode(file.read()).decode("utf-8")
+                gemini_payload.append({"mime_type": file.content_type, "data": file_data})
                 
         if gemini_payload:
             try:
                 base_instruction = "Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details."
                 if extra_prompt:
+                    base_instruction += f" Additional Note: {extra_prompt}"
