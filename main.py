@@ -109,8 +109,8 @@ def index():
     
     if extra_prompt:
         try:
-            # FIXED: Initializing client inside the active request loop ensures Render has time to inject variables
-            client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+            # FIXED: Initializing with an explicit empty proxies dictionary strips away Render network environment bugs
+            client = Groq(api_key=os.environ.get("GROQ_API_KEY"), http_client=None)
             
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": extra_prompt}],
