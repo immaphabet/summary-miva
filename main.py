@@ -28,18 +28,21 @@ def index():
         search_filter = request.form.get("search_filter", "").strip().lower()
         
     compiled_articles = []
-    
-    # --- FIXED EXPLICIT LIST EXTRACTION MATRIX ---
     articles_source = []
+    
+    # --- CRITICAL FIX: Convert items explicitly into a sliceable list structure ---
     if hasattr(feed, 'entries') and feed.entries:
-        articles_source = feed.entries
+        articles_source = list(feed.entries)
     elif hasattr(feed, 'items'):
-        # If items is an internal callable dictionary method, execute it natively
-        articles_source = feed.items() if callable(feed.items) else feed.items
+        raw_items = feed.items() if callable(feed.items) else feed.items
+        articles_source = list(raw_items)
         
     if articles_source:
         for entry in articles_source[:15]:
-            # Safeguard dictionary extraction mapping types smoothly
+            # Secure handling if items are tuple pairs or dictionaries
+            if isinstance(entry, tuple) and len(entry) == 2:
+                entry = entry[1]
+                
             if isinstance(entry, dict):
                 title = entry.get("title", "")
                 summary_text = entry.get("summary", "")
@@ -49,26 +52,26 @@ def index():
                 summary_text = getattr(entry, "summary", "")
                 link = getattr(entry, "link", "#")
                 
-            # Clean up raw description strings cleanly into crisp excerpts
             if summary_text:
-                if isinstance(summary_text, list) and len(summary_text) > 0:
-                    summary_text = str(summary_text[0])
-                else:
-                    summary_text = str(summary_text)
-                    
+                summary_text = str(summary_text)
                 if "<" in summary_text:
+                    # FIXED: Splitting cleanly and stripping the resulting text block safely
                     summary_text = summary_text.split("<")[0].strip()
+                else:
+                    summary_text = summary_text.strip()
                     
                 if len(summary_text) > 170:
                     summary_text = summary_text[:167] + "..."
             else:
                 summary_text = "Click below to read full breaking article details."
                 
-            if search_filter:
-                if search_filter in title.lower() or search_filter in summary_text.lower():
+            if title:
+                title = str(title).strip()
+                if search_filter:
+                    if search_filter in title.lower() or search_filter in summary_text.lower():
+                        compiled_articles.append({"title": title, "summary": summary_text, "link": link})
+                else:
                     compiled_articles.append({"title": title, "summary": summary_text, "link": link})
-            else:
-                compiled_articles.append({"title": title, "summary": summary_text, "link": link})
                 
     return render_template_string(HTML_LAYOUT, articles=compiled_articles)
 
@@ -89,4 +92,4 @@ def admin_panel():
 
 if __name__ == '__main__':
     app.run(debug=True)
-                                          
+                
