@@ -19,6 +19,7 @@ def log_user_session():
 @app.route("/", methods=["GET", "POST"])
 def index():
     log_user_session()
+    
     rss_url = "https://myschool.ng"
     feed = feedparser.parse(rss_url)
     
@@ -27,18 +28,42 @@ def index():
         search_filter = request.form.get("search_filter", "").strip().lower()
         
     compiled_articles = []
-    articles_source = feed.entries if feed.entries else feed.items
     
+    # --- FIXED EXPLICIT LIST EXTRACTION MATRIX ---
+    articles_source = []
+    if hasattr(feed, 'entries') and feed.entries:
+        articles_source = feed.entries
+    elif hasattr(feed, 'items'):
+        # If items is an internal callable dictionary method, execute it natively
+        articles_source = feed.items() if callable(feed.items) else feed.items
+        
     if articles_source:
         for entry in articles_source[:15]:
-            title = entry.get("title", "")
-            summary_text = entry.get("summary", "")
-            if "<" in summary_text:
-                summary_text = summary_text.split("<")[0]
-            if len(summary_text) > 170:
-                summary_text = summary_text[:167] + "..."
-            link = entry.get("link", "#")
-            
+            # Safeguard dictionary extraction mapping types smoothly
+            if isinstance(entry, dict):
+                title = entry.get("title", "")
+                summary_text = entry.get("summary", "")
+                link = entry.get("link", "#")
+            else:
+                title = getattr(entry, "title", "")
+                summary_text = getattr(entry, "summary", "")
+                link = getattr(entry, "link", "#")
+                
+            # Clean up raw description strings cleanly into crisp excerpts
+            if summary_text:
+                if isinstance(summary_text, list) and len(summary_text) > 0:
+                    summary_text = str(summary_text[0])
+                else:
+                    summary_text = str(summary_text)
+                    
+                if "<" in summary_text:
+                    summary_text = summary_text.split("<")[0].strip()
+                    
+                if len(summary_text) > 170:
+                    summary_text = summary_text[:167] + "..."
+            else:
+                summary_text = "Click below to read full breaking article details."
+                
             if search_filter:
                 if search_filter in title.lower() or search_filter in summary_text.lower():
                     compiled_articles.append({"title": title, "summary": summary_text, "link": link})
@@ -64,4 +89,4 @@ def admin_panel():
 
 if __name__ == '__main__':
     app.run(debug=True)
-        
+                                          
