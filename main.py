@@ -8,7 +8,6 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
-# Using the stable multimodal model for production
 model = genai.GenerativeModel('gemini-2.5-flash')
 
 HTML_LAYOUT = """
@@ -23,11 +22,7 @@ HTML_LAYOUT = """
         .workspace-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 140px; margin-top: 20px; width: 100%; }
         .gemini-greeting { font-size: 38px; font-weight: 400; line-height: 1.25; color: #ffffff; letter-spacing: -1px; margin-bottom: 35px; text-align: left; max-width: 95%; }
         .output-stream { width: 100%; display: flex; flex-direction: column; gap: 20px; }
-        
-        /* Styled summary container box */
         .summary-box { background: #11141b; border: 1px solid #1e293b; padding: 24px; border-radius: 20px; width: 100%; box-sizing: border-box; }
-        
-        /* Markdown Component Overrides for Clean Layouts */
         .ai-markdown-bubble { color: #e2e8f0; font-size: 16px; line-height: 1.7; text-align: left; }
         .ai-markdown-bubble h1, .ai-markdown-bubble h2, .ai-markdown-bubble h3 { color: #38bdf8; margin-top: 16px; margin-bottom: 8px; font-weight: 600; }
         .ai-markdown-bubble h1 { font-size: 22px; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }
@@ -38,7 +33,6 @@ HTML_LAYOUT = """
         .ai-markdown-bubble ul, .ai-markdown-bubble ol { margin: 0 0 16px 0; padding-left: 20px; color: #cbd5e1; }
         .ai-markdown-bubble li { margin-bottom: 6px; }
         .ai-markdown-bubble code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 14px; color: #f43f5e; }
-        
         .slide-bubble { width: 100%; height: 240px; background: #11141b; border: 1px solid #1e293b; border-radius: 20px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; margin-bottom: 11px; }
         .slide-bubble img { max-width: 100%; max-height: 100%; object-fit: contain; }
         .counter-pill { position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 20px; font-size: 11px; color: #38bdf8; font-weight: 600; }
@@ -69,10 +63,8 @@ HTML_LAYOUT = """
                     </div>
                 </div>
                 
-                <!-- Only render wrapper container when markdown content exists -->
                 {% if summary %}
                 <div class="summary-box">
-                    <!-- safe filter allows the parsed Markdown HTML elements to render properly -->
                     <div class="ai-markdown-bubble" id="response-block">{{ summary|safe }}</div>
                 </div>
                 {% else %}
@@ -135,7 +127,7 @@ HTML_LAYOUT = """
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    summary = None 
+    summary = None
     
     if request.method == "POST":
         slide_files = request.files.getlist("slide_images")
@@ -152,3 +144,12 @@ def index():
         
         if gemini_payload:
             base_instruction = "Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details."
+            if extra_prompt:
+                base_instruction += f" Additional Note: {extra_prompt}"
+            
+            gemini_payload.append(base_instruction)
+            
+            try:
+                response = model.generate_content(contents=gemini_payload)
+                summary = markdown.markdown(response.text)
+            except Exception as e:
