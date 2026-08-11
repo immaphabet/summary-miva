@@ -1,38 +1,51 @@
 import os
-import requests
-from flask import Flask, render_template_string, request
+import uuid
+import feedparser
+from flask import Flask, render_template_string, request, session
 import markdown
 
 app = Flask(__name__)
+# Set a secret key to enable secure browser session cookie tracking
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "gistpulse_secure_session_key_2026")
+
+# Server-level in-memory registry dictionary to track live device hits natively
+ACTIVE_SESSIONS = {}
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>CramPulse | AI Study Workspace</title>
+    <title>GistPulse | Campus News & Gist Hub</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #000000; color: #ffffff; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow-x: hidden; -webkit-user-select: none; user-select: none; }
-        #app-screen { width: 100%; max-width: 600px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; min-height: 100vh; justify-content: space-between; position: relative; }
-        .workspace-body { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-bottom: 140px; margin-top: 20px; width: 100%; }
-        .gemini-greeting { font-size: 38px; font-weight: 400; line-height: 1.25; color: #ffffff; letter-spacing: -1px; margin-bottom: 35px; text-align: left; max-width: 95%; }
-        .output-stream { width: 100%; display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
-        .user-message-bubble { background: #005c4b; color: #ffffff; padding: 14px 18px; border-radius: 18px 18px 4px 18px; align-self: flex-end; max-width: 85%; font-size: 15px; line-height: 1.5; word-wrap: break-word; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.3); margin-left: auto; position: relative; -webkit-tap-highlight-color: transparent; cursor: pointer; }
-        .summary-box { background: #11141b; border: 1px solid #1e293b; padding: 24px; border-radius: 18px 18px 18px 4px; width: 85%; box-sizing: border-box; align-self: flex-start; }
-        .ai-markdown-bubble { color: #e2e8f0; font-size: 16px; line-height: 1.7; text-align: left; }
-        .ai-markdown-bubble h1, .ai-markdown-bubble h2, .ai-markdown-bubble h3 { color: #38bdf8; margin-top: 16px; margin-bottom: 8px; font-weight: 600; }
-        .ai-markdown-bubble p { margin: 0 0 12px 0; }
-        .ai-markdown-bubble strong { color: #ffffff; font-weight: 600; }
-        .ai-markdown-bubble ul, .ai-markdown-bubble ol { margin: 0 0 16px 0; padding-left: 20px; color: #cbd5e1; }
-        .ai-markdown-bubble li { margin-bottom: 6px; }
-        .custom-context-menu { position: fixed; background: #1f2c34; border: 1px solid #2a3942; border-radius: 12px; padding: 6px 0; width: 140px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none; z-index: 100; }
-        .context-menu-item { padding: 12px 16px; font-size: 14px; color: #e9edef; cursor: pointer; display: flex; align-items: center; font-weight: 500; }
-        .context-menu-item:active { background: #101a20; }
-        .bottom-dock { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, #000000 25%); padding: 20px 0; display: flex; flex-direction: column; align-items: center; z-index: 10; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #000000; color: #ffffff; min-height: 100vh; overflow-x: hidden; }
+        #viewport-slider { display: flex; width: 200vw; min-height: 100vh; transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1); transform: translateX(0); }
+        .page-screen-view { width: 100vw; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 30px; position: relative; }
+        .intro-title { font-size: 42px; font-weight: 700; color: #ffffff; margin-bottom: 8px; letter-spacing: -1px; text-shadow: 0 2px 4px rgba(0,0,0,0.5); }
+        .intro-subtitle { font-size: 15px; color: #64748b; text-align: center; max-width: 320px; line-height: 1.5; margin-bottom: 40px; }
+        .agreement-pill-box { background: #11141b; border: 1px solid #1e293b; padding: 20px; border-radius: 20px; max-width: 360px; margin-bottom: 35px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); }
+        .agreement-row { display: flex; align-items: flex-start; gap: 12px; }
+        .agreement-row input[type="checkbox"] { width: 18px; height: 18px; accent-color: #38bdf8; margin-top: 2px; cursor: pointer; flex-shrink: 0; }
+        .agreement-text { font-size: 13px; color: #cbd5e1; line-height: 1.5; text-align: left; }
+        .enter-hub-btn { background: #38bdf8; color: #000000; border: none; padding: 14px 45px; border-radius: 25px; font-size: 15px; font-weight: 600; cursor: pointer; opacity: 0.5; pointer-events: none; transition: all 0.3s ease; box-shadow: 0 4px 10px rgba(56,189,248,0.2); }
+        .enter-hub-btn.active { opacity: 1; pointer-events: auto; }
+        .enter-hub-btn.active:active { transform: scale(0.97); background: #0ea5e9; }
+        .dashboard-screen { width: 100vw; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; padding: 20px; position: relative; }
+        .workspace-body { width: 100%; max-width: 600px; display: flex; flex-direction: column; justify-content: flex-start; padding-bottom: 140px; margin-top: 10px; }
+        .gemini-greeting { font-size: 34px; font-weight: 600; line-height: 1.2; color: #ffffff; letter-spacing: -1px; margin-bottom: 4px; text-align: left; }
+        .sub-greeting { font-size: 14px; color: #64748b; margin-bottom: 25px; text-align: left; }
+        .output-stream { width: 100%; display: flex; flex-direction: column; gap: 16px; }
+        .summary-box { background: #11141b; border: 1px solid #1e293b; padding: 20px; border-radius: 16px; width: 100%; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; }
+        .card-tag { font-size: 11px; color: #38bdf8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-title { font-size: 18px; font-weight: 600; color: #ffffff; margin: 2px 0; line-height: 1.4; }
+        .ai-markdown-bubble { color: #cbd5e1; font-size: 14px; line-height: 1.6; text-align: left; }
+        .read-more-btn { align-self: flex-shrink; margin-top: 6px; font-size: 13px; background: #005c4b; color: #ffffff; padding: 6px 14px; border-radius: 20px; text-decoration: none; font-weight: 500; display: inline-block; width: max-content; }
+        .no-results { color: #64748b; font-size: 14px; text-align: center; padding: 4px; }
+        .bottom-dock { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, #000000 25%); padding: 20px 0; display: flex; flex-direction: column; align-items: center; z-index: 10; width: 100%; }
         .grok-disclosure-line { font-size: 12px; color: #475569; margin-bottom: 8px; text-align: center; font-weight: 500; }
         .console-pill { width: 92%; max-width: 600px; background: #11141b; border: 1px solid #1e293b; border-radius: 28px; padding: 8px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; }
         .input-text-group { display: flex; align-items: center; gap: 10px; width: 100%; }
-        textarea { flex: 1; height: 44px; padding: 12px 4px 0 4px; border: none; background: transparent; color: #ffffff; resize: none; font-size: 15px; font-family: inherit; box-sizing: border-box; -webkit-user-select: text; user-select: text; }
+        textarea { flex: 1; height: 44px; padding: 12px 4px 0 4px; border: none; background: transparent; color: #ffffff; resize: none; font-size: 15px; font-family: inherit; box-sizing: border-box; }
         textarea:focus { outline: none; }
         textarea::placeholder { color: #475569; }
         .action-send-btn { width: 40px; height: 40px; background: #38bdf8; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #000000; flex-shrink: 0; padding-left: 4px; }
@@ -40,100 +53,90 @@ HTML_LAYOUT = """
     </style>
 </head>
 <body>
-    <div id="app-screen">
-        <div class="workspace-body">
-            <div class="gemini-greeting">I can help compress, study, review & more. What should we do?</div>
-            <div class="output-stream">
-                {% if user_question %}
-                <div class="user-message-bubble" id="chat-bubble" ontouchstart="handleTouchStart(event)" ontouchend="handleTouchEnd(event)">{{ user_question }}</div>
-                {% endif %}
-                {% if summary %}
-                <div class="summary-box" id="ai-response-box">
-                    <div class="ai-markdown-bubble">{{ summary|safe }}</div>
+    <div id="viewport-slider">
+        <div class="page-screen-view">
+            <div class="intro-title">GistPulse</div>
+            <div class="intro-subtitle">Unified campus data syndication pipeline. View verified announcements and student gist instantly.</div>
+            <div class="agreement-pill-box">
+                <div class="agreement-row">
+                    <input type="checkbox" id="consent-gate" onchange="toggleEnterPermission(this)">
+                    <label class="agreement-text" for="consent-gate">
+                        I agree to launch the GistPulse workspace interface and accept that headlines are synchronized live from public university news feeds.
+                    </label>
                 </div>
-                {% endif %}
             </div>
+            <button type="button" class="enter-hub-btn" id="gate-btn" onclick="executeHorizontalSlideTransition()">Enter Workspace</button>
         </div>
-        <div class="custom-context-menu" id="popup-menu">
-            <div class="context-menu-item" onclick="executeCopyAction()">Copy</div>
-            <div class="context-menu-item" style="color: #38bdf8; border-top: 1px solid #2a3942;" onclick="executeEditAction()">Edit</div>
-        </div>
-        <div class="bottom-dock">
-            <div class="grok-disclosure-line">Developed by Emmanuel Olorunjuwonlo</div>
-            <div class="console-pill">
-                <form method="POST" action="/" id="engine-form" style="margin:0; display:flex; flex-direction:column; gap:6px;">
-                    <div class="input-text-group">
-                        <textarea name="extra_prompt" id="user-input" placeholder="Ask CramPulse anything..." required></textarea>
-                        <button type="submit" class="action-send-btn">
-                            <svg viewBox="0 0 24 24">
-                                <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" />
-                            </svg>
-                        </button>
-                    </div>
-                </form>
+        
+        <div class="dashboard-screen">
+            <div class="workspace-body">
+                <div class="gemini-greeting">GistPulse</div>
+                <div class="sub-greeting">Latest verified campus news feeds & student gist bundles.</div>
+                <div class="output-stream">
+                    {% if articles %}
+                        {% for item in articles %}
+                        <div class="summary-box">
+                            <div class="card-tag">Campus Wire</div>
+                            <div class="card-title">{{ item.title }}</div>
+                            <div class="ai-markdown-bubble">{{ item.summary }}</div>
+                            <a href="{{ item.link }}" target="_blank" class="read-more-btn">Read Full Gist</a>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="no-results">No trending feeds matching your current filter. Try searching something else!</div>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="bottom-dock">
+                <div class="grok-disclosure-line">Developed by Emmanuel Olorunjuwonlo</div>
+                <div class="console-pill">
+                    <form method="POST" action="/" id="engine-form" style="margin:0; display:flex; flex-direction:column; gap:6px;">
+                        <div class="input-text-group">
+                            <textarea name="search_filter" id="user-input" placeholder="Filter gist (e.g. JAMB, Admission, Miva)..." required></textarea>
+                            <button type="submit" class="action-send-btn">
+                                <svg viewBox="0 0 24 24">
+                                    <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" />
+                                </svg>
+                            </button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
     <script>
-        let longPressTimer;
-        const menu = document.getElementById("popup-menu");
-        const bubble = document.getElementById("chat-bubble");
-        function handleTouchStart(e) { longPressTimer = setTimeout(() => { triggerContextMenu(e); }, 500); }
-        function handleTouchEnd() { clearTimeout(longPressTimer); }
-        function triggerContextMenu(e) {
-            e.preventDefault();
-            const rect = bubble.getBoundingClientRect();
-            menu.style.top = `${rect.top - 90}px`;
-            menu.style.left = `${rect.right - 140}px`;
-            menu.style.display = "block";
+        window.onload = function() {
+            const hasQuery = "{{ is_post }}";
+            if(hasQuery === "True") {
+                document.getElementById("viewport-slider").style.transform = "translateX(-100vw)";
+                document.body.style.overflowY = "auto";
+            } else {
+                document.body.style.overflowY = "hidden";
+            }
+        };
+        function toggleEnterPermission(checkbox) {
+            const btn = document.getElementById("gate-btn");
+            if(checkbox.checked) { btn.classList.add("active"); } 
+            else { btn.classList.remove("active"); }
         }
-        document.addEventListener("click", function(e) { if (e.target !== bubble && !menu.contains(e.target)) { menu.style.display = "none"; } });
-        function executeCopyAction() { navigator.clipboard.writeText(bubble.innerText); menu.style.display = "none"; }
-        function executeEditAction() {
-            const textInput = document.getElementById("user-input");
-            textInput.value = bubble.innerText; textInput.focus();
-            menu.style.display = "none"; bubble.style.display = "none";
-            const aiResponse = document.getElementById("ai-response-box");
-            if (aiResponse) aiResponse.style.display = "none";
+        function executeHorizontalSlideTransition() {
+            document.getElementById("viewport-slider").style.transform = "translateX(-100vw)";
+            document.body.style.overflowY = "auto";
         }
     </script>
 </body>
 </html>
 """
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    if request.method == "GET": return render_template_string(HTML_LAYOUT, summary=None, user_question=None)
-    summary = None
-    extra_prompt = request.form.get("extra_prompt", "").strip()
-    
-    if extra_prompt:
-        try:
-            # FIXED ENDPOINT: Added the explicit required /openai routing suffix block back onto the URL
-            api_url = "https://groq.com"
-            headers = {
-                "Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '').strip()}",
-                "Content-Type": "application/json"
-            }
-            json_payload = {
-                "model": "llama3-8b-8192",
-                "messages": [{"role": "user", "content": extra_prompt}]
-            }
-            
-            response = requests.post(api_url, json=json_payload, headers=headers, timeout=10)
-            
-            if response.status_code == 200:
-                response_data = response.json()
-                raw_text = response_data["choices"][0]["message"]["content"]
-                summary = markdown.markdown(raw_text)
-            else:
-                summary = f"⚠️ Groq API Return Error (Status {response.status_code}): {response.text}"
-                
-        except Exception as e:
-            summary = f"⚠️ CramPulse Engine Error: {str(e)}"
-            
-    return render_template_string(HTML_LAYOUT, summary=summary, user_question=extra_prompt)
-
-if __name__ == '__main__':
-    app.run(debug=True)
-    
+ADMIN_LAYOUT = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GistPulse | Co-Founder Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #000000; color: #ffffff; padding: 30px; }
+        .container { max-width: 500px; margin: 40px auto; background: #11141b; border: 1px solid #1e293b; padding: 24px; border-radius: 16px; text-align: center; }
+        h2 { color: #38bdf8; margin-top: 0; }
+        .metric-circle { width: 120px; height: 120px; border-radius: 50%; background: #005c4b; display: flex; align-items: center; justify-content: center; font-size: 36px; font-weight: bold; margin: 20px auto; color: #ffffff; border: 2px solid #38bdf8; }
+        .text { color: #64748b; font-size: 14px; line-height: 1.5; }
