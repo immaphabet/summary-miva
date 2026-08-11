@@ -5,9 +5,6 @@ import markdown
 
 app = Flask(__name__)
 
-# Initialize the ultra-stable Groq API Engine Client
-client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
-
 HTML_LAYOUT = """
 <!DOCTYPE html>
 <html>
@@ -112,12 +109,14 @@ def index():
     
     if extra_prompt:
         try:
-            # Stable, high-speed Llama-3 parsing engine execution
+            # FIXED: Initializing client inside the active request loop ensures Render has time to inject variables
+            client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+            
             chat_completion = client.chat.completions.create(
                 messages=[{"role": "user", "content": extra_prompt}],
                 model="llama3-8b-8192",
             )
-            summary = markdown.markdown(chat_completion.choices[0].message.content)
+            summary = markdown.markdown(chat_completion.choices.message.content)
         except Exception as e:
             summary = f"⚠️ CramPulse Engine Error: {str(e)}"
             
