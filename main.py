@@ -128,28 +128,18 @@ HTML_LAYOUT = """
 @app.route("/", methods=["GET", "POST"])
 def index():
     summary = None
-    
     if request.method == "POST":
         slide_files = request.files.getlist("slide_images")
         extra_prompt = request.form.get("extra_prompt", "")
-        
         gemini_payload = []
         for file in slide_files:
             if file and file.filename != '':
                 file_data = base64.b64encode(file.read()).decode("utf-8")
-                gemini_payload.append({
-                    "mime_type": file.content_type, 
-                    "data": file_data
-                })
-        
+                gemini_payload.append({"mime_type": file.content_type, "data": file_data})
         if gemini_payload:
             base_instruction = "Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details."
             if extra_prompt:
                 base_instruction += f" Additional Note: {extra_prompt}"
-            
             gemini_payload.append(base_instruction)
-            
-            try:
-                response = model.generate_content(contents=gemini_payload)
-                summary = markdown.markdown(response.text)
-            except Exception as e:
+            try: response = model.generate_content(contents=gemini_payload); summary = markdown.markdown(response.text)
+            except Exception as e: summary = f"⚠️ CramPulse Engine Error: Could not connect to Gemini API. Details: {str(e)}"
