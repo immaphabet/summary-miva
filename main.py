@@ -33,16 +33,9 @@ HTML_LAYOUT = """
         .ai-markdown-bubble ul, .ai-markdown-bubble ol { margin: 0 0 16px 0; padding-left: 20px; color: #cbd5e1; }
         .ai-markdown-bubble li { margin-bottom: 6px; }
         .ai-markdown-bubble code { background: #1e293b; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 14px; color: #f43f5e; }
-        .slide-bubble { width: 100%; height: 240px; background: #11141b; border: 1px solid #1e293b; border-radius: 20px; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; margin-bottom: 11px; }
-        .slide-bubble img { max-width: 100%; max-height: 100%; object-fit: contain; }
-        .counter-pill { position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.85); padding: 4px 12px; border-radius: 20px; font-size: 11px; color: #38bdf8; font-weight: 600; }
-        .slider-row { display: flex; gap: 10px; margin-bottom: 25px; }
-        .nav-btn { flex: 1; padding: 12px; background: #11141b; border: 1px solid #1e293b; color: #e2e8f0; border-radius: 12px; cursor: pointer; font-size: 13px; font-weight: 600; }
         .bottom-dock { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, #000000 25%); padding: 20px 0; display: flex; flex-direction: column; align-items: center; z-index: 10; }
         .grok-disclosure-line { font-size: 12px; color: #475569; margin-bottom: 8px; text-align: center; font-weight: 500; }
         .console-pill { width: 92%; max-width: 600px; background: #11141b; border: 1px solid #1e293b; border-radius: 28px; padding: 8px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; }
-        .file-upload-row { display: flex; align-items: center; justify-content: flex-start; padding: 4px 0; border-bottom: 1px solid #1e293b; margin-bottom: 4px; }
-        .file-upload-row input[type="file"] { font-size: 12px; color: #64748b; width: 100%; }
         .input-text-group { display: flex; align-items: center; gap: 10px; width: 100%; }
         textarea { flex: 1; height: 44px; padding: 12px 4px 0 4px; border: none; background: transparent; color: #ffffff; resize: none; font-size: 15px; font-family: inherit; box-sizing: border-box; }
         textarea:focus { outline: none; }
@@ -55,72 +48,25 @@ HTML_LAYOUT = """
         <div class="workspace-body">
             <div class="gemini-greeting">I can help compress, study, review & more. What should we do?</div>
             <div class="output-stream">
-                <div id="deck-preview-bubble" style="display:none; width: 100%;">
-                    <div class="slide-bubble" id="display-frame"><span style="color:#475569;">Assembling material elements...</span></div>
-                    <div class="slider-row">
-                        <button type="button" class="nav-btn" onclick="shiftSlideIndex(-1)">&larr; Prev Slide</button>
-                        <button type="button" class="nav-btn" onclick="shiftSlideIndex(1)">Next Slide &rarr;</button>
-                    </div>
-                </div>
-                
                 {% if summary %}
                 <div class="summary-box">
-                    <div class="ai-markdown-bubble" id="response-block">{{ summary|safe }}</div>
+                    <div class="ai-markdown-bubble">{{ summary|safe }}</div>
                 </div>
-                {% else %}
-                <div class="ai-markdown-bubble" id="response-block"></div>
                 {% endif %}
             </div>
         </div>
         <div class="bottom-dock">
             <div class="grok-disclosure-line">Developed by Emmanuel Olorunjuwonlo</div>
             <div class="console-pill">
-                <form method="POST" action="/" enctype="multipart/form-data" id="engine-form" style="margin:0; display:flex; flex-direction:column; gap:6px;">
-                    <!-- REMOVED 'required' from file input so you can send pure text messages -->
-                    <div class="file-upload-row"><input type="file" name="slide_images" multiple accept="image/*" onchange="loadSlidesPreview(this)"></div>
+                <form method="POST" action="/" id="engine-form" style="margin:0; display:flex; flex-direction:column; gap:6px;">
                     <div class="input-text-group">
                         <textarea name="extra_prompt" id="user-input" placeholder="Ask CramPulse anything..." required></textarea>
-                        <button type="submit" class="action-send-btn" onclick="indicateLoadingState()">&uarr;</button>
+                        <button type="submit" class="action-send-btn">&uarr;</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
-    <script>
-        var localSlidesCache = []; var activePointer = 0;
-        function loadSlidesPreview(uploader) {
-            localSlidesCache = []; activePointer = 0;
-            if(uploader.files && uploader.files.length > 0) {
-                document.getElementById("deck-preview-bubble").style.display = "block";
-                Array.from(uploader.files).forEach(file => {
-                    const reader = new FileReader();
-                    reader.onload = (e) => { localSlidesCache.push(e.target.result); refreshViewerDOM(); };
-                    reader.readAsDataURL(file);
-                });
-            }
-        }
-        function refreshViewerDOM() {
-            const frame = document.getElementById("display-frame");
-            if (localSlidesCache.length === 0) return;
-            frame.innerHTML = `<img src="${localSlidesCache[activePointer]}"><div class="counter-pill">Slide ${activePointer + 1} of ${localSlidesCache.length}</div>`;
-        }
-        function shiftSlideIndex(direction) {
-            if (localSlidesCache.length === 0) return;
-            activePointer = (activePointer + direction + localSlidesCache.length) % localSlidesCache.length;
-            refreshViewerDOM();
-        }
-        function indicateLoadingState() {
-            const textareaValue = document.getElementById("user-input").value;
-            if(textareaValue) {
-                const respBlock = document.getElementById("response-block");
-                if(respBlock.parentElement.className !== "summary-box") {
-                    respBlock.outerHTML = '<div class="summary-box"><div class="ai-markdown-bubble" id="response-block">✨ CramPulse is analyzing your slide materials... compiling your custom briefing study notes now.</div></div>';
-                } else {
-                    respBlock.innerHTML = "✨ CramPulse is analyzing your slide materials... compiling your custom briefing study notes now.";
-                }
-            }
-        }
-    </script>
 </body>
 </html>
 """
@@ -129,18 +75,16 @@ HTML_LAYOUT = """
 def index():
     if request.method == "GET": return render_template_string(HTML_LAYOUT, summary=None)
     summary = None
-    slide_files = request.files.getlist("slide_images")
-    extra_prompt = request.form.get("extra_prompt", "")
-    gemini_payload = []
+    extra_prompt = request.form.get("extra_prompt", "").strip()
     
-    # Process files if they exist
-    for file in slide_files:
-        if file and file.filename != '':
-            file_data = base64.b64encode(file.read()).decode("utf-8")
-            gemini_payload.append({"mime_type": file.content_type, "data": file_data})
+    if extra_prompt:
+        try:
+            response = model.generate_content(contents=[extra_prompt])
+            summary = markdown.markdown(response.text)
+        except Exception as e:
+            summary = f"⚠️ CramPulse Engine Error: {str(e)}"
             
-    # Assembles final instruction based on whether images were attached or it is a text-only command
-    if gemini_payload:
-        base_instruction = f"Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details. Additional Note: {extra_prompt}" if extra_prompt else "Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details."
-        gemini_payload.append(base_instruction)
-    elif extra_prompt:
+    return render_template_string(HTML_LAYOUT, summary=summary)
+
+if __name__ == '__main__':
+    app.run(debug=True)
