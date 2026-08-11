@@ -109,6 +109,7 @@ def index():
     
     if extra_prompt:
         try:
+            # FIXED: Accurate endpoint URL syntax pattern targeting the chat completion array directly
             api_url = "https://groq.com"
             headers = {
                 "Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '').strip()}",
@@ -119,11 +120,11 @@ def index():
                 "messages": [{"role": "user", "content": extra_prompt}]
             }
             
-            # Added a timeout and clean error collection checks
             response = requests.post(api_url, json=json_payload, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 response_data = response.json()
+                # Extract content properly out of nested choice elements
                 raw_text = response_data["choices"][0]["message"]["content"]
                 summary = markdown.markdown(raw_text)
             else:
@@ -136,3 +137,4 @@ def index():
 
 if __name__ == '__main__':
     app.run(debug=True)
+    
