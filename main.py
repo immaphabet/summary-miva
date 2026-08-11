@@ -23,28 +23,29 @@ def index():
     feed = feedparser.parse(rss_url)
     
     search_filter = ""
-    is_post = "False"
     if request.method == "POST":
         search_filter = request.form.get("search_filter", "").strip().lower()
-        is_post = "True"
         
     compiled_articles = []
-    for entry in feed.entries[:15]:
-        title = entry.get("title", "")
-        summary_text = entry.get("summary", "")
-        if "<" in summary_text:
-            summary_text = summary_text.split("<")
-        if len(summary_text) > 160:
-            summary_text = summary_text[:157] + "..."
-        link = entry.get("link", "#")
-        
-        if search_filter:
-            if search_filter in title.lower() or search_filter in summary_text.lower():
-                compiled_articles.append({"title": title, "summary": summary_text, "link": link})
-        else:
-            compiled_articles.append({"title": title, "summary": summary_text, "link": link})
+    articles_source = feed.entries if feed.entries else feed.items
+    
+    if articles_source:
+        for entry in articles_source[:15]:
+            title = entry.get("title", "")
+            summary_text = entry.get("summary", "")
+            if "<" in summary_text:
+                summary_text = summary_text.split("<")[0]
+            if len(summary_text) > 170:
+                summary_text = summary_text[:167] + "..."
+            link = entry.get("link", "#")
             
-    return render_template_string(HTML_LAYOUT, articles=compiled_articles, is_post=is_post)
+            if search_filter:
+                if search_filter in title.lower() or search_filter in summary_text.lower():
+                    compiled_articles.append({"title": title, "summary": summary_text, "link": link})
+            else:
+                compiled_articles.append({"title": title, "summary": summary_text, "link": link})
+                
+    return render_template_string(HTML_LAYOUT, articles=compiled_articles)
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin_panel():
@@ -63,3 +64,4 @@ def admin_panel():
 
 if __name__ == '__main__':
     app.run(debug=True)
+        
