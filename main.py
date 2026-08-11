@@ -8,8 +8,8 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
-# FIXED: Updated to the live production model identifier string
-model = genai.GenerativeModel('gemini-2.5-flash-latest')
+# CORRECT MODEL ID: Matches the exact syntax expected by your SDK version
+model = genai.GenerativeModel('gemini-2.5-flash')
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
