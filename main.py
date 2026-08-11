@@ -128,7 +128,6 @@ HTML_LAYOUT = """
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "GET": return render_template_string(HTML_LAYOUT, summary=None)
-    
     summary = None
     slide_files = request.files.getlist("slide_images")
     extra_prompt = request.form.get("extra_prompt", "")
@@ -140,4 +139,5 @@ def index():
     if gemini_payload:
         base_instruction = f"Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details. Additional Note: {extra_prompt}" if extra_prompt else "Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details."
         gemini_payload.append(base_instruction)
-        try: response = model.generate_content(contents=gemini_payload); summary = markdown.markdown(response.text)
+        response = model.generate_content(contents=gemini_payload)
+        summary = markdown.markdown(response.text)
