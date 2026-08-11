@@ -1,6 +1,6 @@
 import os
+import requests
 from flask import Flask, render_template_string, request
-from groq import Groq
 import markdown
 
 app = Flask(__name__)
@@ -109,14 +109,24 @@ def index():
     
     if extra_prompt:
         try:
-            # FIXED: Initializing with an explicit empty proxies dictionary strips away Render network environment bugs
-            client = Groq(api_key=os.environ.get("GROQ_API_KEY"), http_client=None)
+            # Native raw HTTP network request directly to Groq API
+            api_url = "https://groq.com"
+            headers = {
+                "Authorization": f"Bearer {os.environ.get('GROQ_API_KEY')}",
+                "Content-Type": "application/json"
+            }
+            json_payload = {
+                "model": "llama3-8b-8192",
+                "messages": [{"role": "user", "content": extra_prompt}]
+            }
             
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": "user", "content": extra_prompt}],
-                model="llama3-8b-8192",
-            )
-            summary = markdown.markdown(chat_completion.choices.message.content)
+            # Using direct, basic Python requests communication channel
+            response = requests.post(api_url, json=json_payload, headers=headers)
+            response_data = response.json()
+            
+            raw_text = response_data["choices"][0]["message"]["content"]
+            summary = markdown.markdown(raw_text)
+            
         except Exception as e:
             summary = f"⚠️ CramPulse Engine Error: {str(e)}"
             
