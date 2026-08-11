@@ -2,80 +2,91 @@ HTML_LAYOUT = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>GistPulse | Campus Hub</title>
+    <title>GistPulse | Campus News & Gist Hub</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: -apple-system, sans-serif; margin: 0; padding: 0; background: #000000; color: #ffffff; min-height: 100vh; }
-        #viewport-slider { display: flex; width: 200vw; min-height: 100vh; transition: transform 0.6s ease; }
-        .page-screen-view, .dashboard-screen { width: 100vw; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
-        .dashboard-screen { justify-content: flex-start; }
-        .agreement-pill-box { background: #11141b; border: 1px solid #1e293b; padding: 20px; border-radius: 16px; max-width: 340px; margin: 20px 0; }
-        .enter-hub-btn { background: #38bdf8; color: #000000; border: none; padding: 12px 40px; border-radius: 20px; font-weight: bold; cursor: pointer; opacity: 0.5; pointer-events: none; }
-        .enter-hub-btn.active { opacity: 1; pointer-events: auto; }
-        .workspace-body { width: 100%; max-width: 500px; padding-bottom: 120px; }
-        .summary-box { background: #11141b; border: 1px solid #1e293b; padding: 16px; border-radius: 12px; margin-bottom: 12px; }
-        .card-tag { font-size: 11px; color: #38bdf8; font-weight: bold; }
-        .card-title { font-size: 16px; font-weight: bold; margin: 4px 0; }
-        .ai-markdown-bubble { color: #cbd5e1; font-size: 13px; }
-        .read-more-btn { background: #005c4b; color: #ffffff; padding: 4px 12px; border-radius: 12px; text-decoration: none; font-size: 12px; display: inline-block; margin-top: 6px; }
-        .bottom-dock { position: fixed; bottom: 0; left: 0; right: 0; background: #000000; padding: 16px; display: flex; flex-direction: column; align-items: center; }
-        .console-pill { width: 90%; max-width: 500px; background: #11141b; border: 1px solid #1e293b; border-radius: 24px; padding: 6px 12px; display: flex; align-items: center; }
-        textarea { flex: 1; height: 36px; background: transparent; border: none; color: #ffffff; resize: none; padding-top: 8px; }
-        textarea:focus { outline: none; }
-        .action-send-btn { width: 32px; height: 36px; background: #38bdf8; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        /* Editorial White & Bold Red Design Theme */
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background: #ffffff; color: #111827; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; }
+        #app-screen { width: 100%; max-width: 600px; padding: 20px; box-sizing: border-box; display: flex; flex-direction: column; min-height: 100vh; }
+        
+        /* Premium Punch Newspaper Style Header */
+        .app-header { width: 100%; border-bottom: 3px solid #dc2626; padding-bottom: 12px; margin-bottom: 20px; text-align: left; }
+        .brand-logo { font-size: 32px; font-weight: 900; color: #dc2626; letter-spacing: -1px; text-transform: uppercase; }
+        .brand-sub { font-size: 12px; color: #4b5563; margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        /* Editorial Informational Lead Header Card */
+        .publisher-card { background: #f8fafc; border: 1px solid #e2e8f0; border-left: 4px solid #dc2626; padding: 14px 16px; border-radius: 8px; margin-bottom: 20px; box-sizing: border-box; }
+        .publisher-title { font-size: 14px; font-weight: 700; color: #111827; margin: 0 0 4px 0; }
+        .publisher-text { font-size: 12px; color: #4b5563; margin: 0; line-height: 1.5; }
+        
+        /* News List Stream Container */
+        .news-stream { width: 100%; display: flex; flex-direction: column; gap: 16px; padding-bottom: 140px; }
+        
+        /* Clean Newspaper Content Card Design */
+        .news-card { background: #ffffff; border: 1px solid #e5e7eb; padding: 20px; border-radius: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
+        .card-tag { font-size: 11px; color: #dc2626; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .card-title { font-size: 19px; font-weight: 800; color: #111827; line-height: 1.35; margin: 2px 0; }
+        .card-excerpt { color: #374151; font-size: 14px; line-height: 1.6; text-align: left; }
+        
+        .action-link { align-self: flex-start; margin-top: 4px; font-size: 13px; color: #dc2626; text-decoration: none; font-weight: 700; }
+        .action-link:hover { text-decoration: underline; }
+        .no-results { color: #6b7280; font-size: 14px; text-align: center; padding: 30px; width: 100%; }
+        
+        /* Clean Editorial Floating Input Search Bar Dock Layout */
+        .search-dock { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, #ffffff 30%); padding: 25px 0; display: flex; flex-direction: column; align-items: center; z-index: 10; }
+        .credit-line { font-size: 11px; color: #4b5563; margin-bottom: 8px; text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px; }
+        .search-pill-bar { width: 92%; max-width: 600px; background: #ffffff; border: 2px solid #e5e7eb; border-radius: 30px; padding: 4px 6px 4px 16px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .search-pill-bar:focus-within { border-color: #dc2626; }
+        
+        input[type="text"] { flex: 1; height: 38px; background: transparent; border: none; color: #111827; font-size: 15px; font-family: inherit; box-sizing: border-box; }
+        input[type="text"]:focus { outline: none; }
+        input[type="text"]::placeholder { color: #9ca3af; }
+        
+        /* Matching Red Execution Button */
+        .search-execute-btn { background: #dc2626; border: none; border-radius: 20px; padding: 10px 22px; font-size: 13px; font-weight: 700; color: #ffffff; cursor: pointer; flex-shrink: 0; text-transform: uppercase; letter-spacing: 0.5px; transition: background 0.2s; }
+        .search-execute-btn:active { background: #b91c1c; }
     </style>
 </head>
 <body>
-    <div id="viewport-slider">
-        <div class="page-screen-view">
-            <h2>GistPulse</h2>
-            <p style="color:#64748b; text-align:center;">Unified campus data syndication pipeline.</p>
-            <div class="agreement-pill-box">
-                <input type="checkbox" id="consent-gate" onchange="togglePermission(this)">
-                <label for="consent-gate" style="font-size:12px; color:#cbd5e1;">I agree to launch the GistPulse interface and accept that headlines are synced live.</label>
-            </div>
-            <button type="button" class="enter-hub-btn" id="gate-btn" onclick="slideView()">Enter Workspace</button>
+    <div id="app-screen">
+        <!-- Punch Style Red Border Top Bar Header Layout -->
+        <div class="app-header">
+            <div class="brand-logo">GistPulse</div>
+            <div class="brand-sub">Live Campus News Aggregation & Short Gist Syndication</div>
         </div>
-        <div class="dashboard-screen">
-            <div class="workspace-body">
-                <h3>GistPulse</h3>
-                {% if articles %}
-                    {% for item in articles %}
-                    <div class="summary-box">
-                        <div class="card-tag">Campus Wire</div>
-                        <div class="card-title">{{ item.title }}</div>
-                        <div class="ai-markdown-bubble">{{ item.summary }}</div>
-                        <a href="{{ item.link }}" target="_blank" class="read-more-btn">Read Full Gist</a>
-                    </div>
-                    {% endfor %}
-                {% else %}
-                    <p style="color:#64748b; text-align:center;">No match found.</p>
-                {% endif %}
-            </div>
-            <div class="bottom-dock">
-                <p style="font-size:11px; color:#475569; margin:4px;">Developed by Emmanuel Olorunjuwonlo</p>
-                <div class="console-pill">
-                    <form method="POST" action="/" id="engine-form" style="width:100%; display:flex; gap:6px; margin:0;">
-                        <textarea name="search_filter" placeholder="Filter gist..."></textarea>
-                        <button type="submit" class="action-send-btn"><svg viewBox="0 0 24 24" style="width:16px; fill:#000;"><path d="M2,21L23,12L2,3V10L17,12L2,14V21Z"/></svg></button>
-                    </form>
+        
+        <!-- Native Top Integrated Editorial Content Publisher Info Card -->
+        <div class="publisher-card">
+            <div class="publisher-title">GistPulse Newsroom</div>
+            <div class="publisher-text">Curated by Lead Engineer: Emmanuel Olorunjuwonlo. Monitoring live academic news feeds, admissions data streams, and trending student updates.</div>
+        </div>
+        
+        <div class="news-stream">
+            {% if articles %}
+                {% for item in articles %}
+                <div class="news-card">
+                    <div class="card-tag">Breaking News</div>
+                    <div class="card-title">{{ item.title }}</div>
+                    <div class="card-excerpt">{{ item.summary }}</div>
+                    <a href="{{ item.link }}" target="_blank" class="action-link">Read Full Story &rarr;</a>
                 </div>
+                {% endfor %}
+            {% else %}
+                <div class="no-results">No breaking headlines found matching your search keyword context filter.</div>
+            {% endif %}
+        </div>
+        
+        <!-- Bottom News Search Engine Input Navigation Bar Container -->
+        <div class="search-dock">
+            <div class="credit-line">Developed by Emmanuel Olorunjuwonlo</div>
+            <div class="search-pill-bar">
+                <form method="POST" action="/" style="width:100%; display:flex; align-items:center; gap:8px; margin:0;">
+                    <input type="text" name="search_filter" placeholder="Search school news (e.g. Miva, JAMB, Admission)...">
+                    <button type="submit" class="search-execute-btn">Search</button>
+                </form>
             </div>
         </div>
     </div>
-    <script>
-        window.onload = function() {
-            if ("{{ is_post }}" === "True") {
-                document.getElementById("viewport-slider").style.transform = "translateX(-100vw)";
-            }
-        };
-        function togglePermission(cb) {
-            document.getElementById("gate-btn").classList.toggle("active", cb.checked);
-        }
-        function slideView() {
-            document.getElementById("viewport-slider").style.transform = "translateX(-100vw)";
-        }
-    </script>
 </body>
 </html>
 """
@@ -84,28 +95,32 @@ ADMIN_LAYOUT = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>GistPulse | Admin</title>
+    <title>GistPulse | Console</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; background: #000000; color: #ffffff; text-align: center; padding: 40px 20px; }
-        .box { max-width: 400px; margin: auto; background: #11141b; border: 1px solid #1e293b; padding: 20px; border-radius: 12px; }
-        .circle { width: 100px; height: 100px; border-radius: 50%; background: #005c4b; display: flex; align-items: center; justify-content: center; font-size: 32px; margin: 20px auto; border: 2px solid #38bdf8; }
-        input { width: 80%; padding: 10px; background: #000000; border: 1px solid #1e293b; color: #ffffff; margin-bottom: 10px; text-align: center; border-radius: 6px; }
-        button { background: #38bdf8; color: #000000; border: none; padding: 10px 20px; border-radius: 6px; font-weight: bold; }
+        body { font-family: sans-serif; background: #ffffff; color: #111827; text-align: center; padding: 40px 20px; }
+        .box { max-width: 400px; margin: auto; background: #f8fafc; border: 1px solid #e2e8f0; border-top: 4px solid #dc2626; padding: 28px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.02); }
+        h3 { margin-top: 0; color: #111827; }
+        .circle { width: 110px; height: 110px; border-radius: 50%; background: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 36px; margin: 20px auto; border: 3px solid #dc2626; font-weight: bold; color: #dc2626; }
+        input { width: 85%; padding: 12px; background: #ffffff; border: 2px solid #e5e7eb; color: #111827; margin-bottom: 12px; text-align: center; border-radius: 8px; font-size: 16px; }
+        input:focus { border-color: #dc2626; outline: none; }
+        button { background: #dc2626; color: #ffffff; border: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 13px; letter-spacing: 0.5px; }
+        button:active { background: #b91c1c; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h3>Co-Founder Console</h3>
+        <h3>GistPulse Co-Founder Console</h3>
+        <p style="font-size:12px; color:#4b5563; margin-top:-5px; margin-bottom:20px;">Welcome, Emmanuel Olorunjuwonlo</p>
         {% if authenticated %}
             <div class="circle">{{ active_count }}</div>
-            <p style="color:#64748b; font-size:13px;">Active browser sessions in memory.</p>
+            <p style="color:#4b5563; font-size:13px; line-height:1.5;">Unique device browser sessions logged inside server cache loop right now.</p>
         {% else %}
             <form method="POST" action="/admin">
-                <input type="password" name="admin_password" placeholder="Admin Key" required><br>
-                <button type="submit">Verify</button>
+                <input type="password" name="admin_password" placeholder="Admin Access Key" required><br>
+                <button type="submit">Verify Identity</button>
             </form>
-            {% if error %}<p style="color:#f43f5e; font-size:12px;">{{ error }}</p>{% endif %}
+            {% if error %}<p style="color:#dc2626; font-size:12px; margin-top:10px; font-weight:600;">{{ error }}</p>{% endif %}
         {% endif %}
     </div>
 </body>
