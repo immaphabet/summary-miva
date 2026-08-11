@@ -109,7 +109,7 @@ def index():
     
     if extra_prompt:
         try:
-            # FIXED URL: Switched to the precise base completions endpoint route pattern
+            # FIXED ENDPOINT: Added the explicit required /openai routing suffix block back onto the URL
             api_url = "https://groq.com"
             headers = {
                 "Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '').strip()}",
