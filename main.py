@@ -1,12 +1,15 @@
 import os
+import base64
 from flask import Flask, render_template_string, request
-from google import genai
+import google.generativeai as genai
 import markdown
 
 app = Flask(__name__)
 
-# Initialize the modern, official Google GenAI Client
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+API_KEY = os.environ.get("GEMINI_API_KEY")
+genai.configure(api_key=API_KEY)
+# Securely hooks into Google's premier production flash model identifier
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
@@ -22,7 +25,7 @@ HTML_LAYOUT = """
         
         .output-stream { width: 100%; display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
         
-        /* User Bubble Style with text selection disabled to allow custom long press triggers */
+        /* User Bubble Style with touch compatibility settings enabled */
         .user-message-bubble { background: #005c4b; color: #ffffff; padding: 14px 18px; border-radius: 18px 18px 4px 18px; align-self: flex-end; max-width: 85%; font-size: 15px; line-height: 1.5; word-wrap: break-word; text-align: left; box-shadow: 0 1px 2px rgba(0,0,0,0.3); margin-left: auto; position: relative; -webkit-tap-highlight-color: transparent; cursor: pointer; }
         
         /* AI Response Container Box */
@@ -34,7 +37,7 @@ HTML_LAYOUT = """
         .ai-markdown-bubble ul, .ai-markdown-bubble ol { margin: 0 0 16px 0; padding-left: 20px; color: #cbd5e1; }
         .ai-markdown-bubble li { margin-bottom: 6px; }
         
-        /* Custom Floating Context Menu Overlay (WhatsApp Style) */
+        /* Floating Action Context Menu Menu Overlay (WhatsApp Layout Match) */
         .custom-context-menu { position: fixed; background: #1f2c34; border: 1px solid #2a3942; border-radius: 12px; padding: 6px 0; width: 140px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); display: none; z-index: 100; }
         .context-menu-item { padding: 12px 16px; font-size: 14px; color: #e9edef; cursor: pointer; display: flex; align-items: center; font-weight: 500; }
         .context-menu-item:active { background: #101a20; }
@@ -57,7 +60,6 @@ HTML_LAYOUT = """
             
             <div class="output-stream">
                 {% if user_question %}
-                <!-- Touch event hooks attached natively onto the bubble node layout -->
                 <div class="user-message-bubble" id="chat-bubble" ontouchstart="handleTouchStart(event)" ontouchend="handleTouchEnd(event)">{{ user_question }}</div>
                 {% endif %}
                 
@@ -69,7 +71,6 @@ HTML_LAYOUT = """
             </div>
         </div>
         
-        <!-- Floating Menu Element Definition -->
         <div class="custom-context-menu" id="popup-menu">
             <div class="context-menu-item" onclick="executeCopyAction()">Copy</div>
             <div class="context-menu-item" style="color: #38bdf8; border-top: 1px solid #2a3942;" onclick="executeEditAction()">Edit</div>
@@ -98,28 +99,23 @@ HTML_LAYOUT = """
         const bubble = document.getElementById("chat-bubble");
 
         function handleTouchStart(e) {
-            // Set timer to open the menu if held down for 500ms
             longPressTimer = setTimeout(() => {
                 triggerContextMenu(e);
             }, 500);
         }
 
         function handleTouchEnd() {
-            // Clear timer if user lifts finger before 500ms expires
             clearTimeout(longPressTimer);
         }
 
         function triggerContextMenu(e) {
             e.preventDefault();
             const rect = bubble.getBoundingClientRect();
-            
-            // Positions menu right directly above the touched chat bubble layout block
             menu.style.top = `${rect.top - 90}px`;
             menu.style.left = `${rect.right - 140}px`;
             menu.style.display = "block";
         }
 
-        // Close menu automatically if user taps anywhere else on the phone screen
         document.addEventListener("click", function(e) {
             if (e.target !== bubble && !menu.contains(e.target)) {
                 menu.style.display = "none";
@@ -130,18 +126,14 @@ HTML_LAYOUT = """
             const rawText = bubble.innerText;
             navigator.clipboard.writeText(rawText);
             menu.style.display = "none";
-            alert("Copied to clipboard!");
         }
 
         function executeEditAction() {
             const rawText = bubble.innerText;
             const textInput = document.getElementById("user-input");
-            
             textInput.value = rawText;
             textInput.focus();
             menu.style.display = "none";
-            
-            // Clear current view stream for the edit refresh layout shift
             bubble.style.display = "none";
             const aiResponse = document.getElementById("ai-response-box");
             if (aiResponse) aiResponse.style.display = "none";
@@ -149,3 +141,22 @@ HTML_LAYOUT = """
     </script>
 </body>
 </html>
+"""
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "GET": return render_template_string(HTML_LAYOUT, summary=None, user_question=None)
+    summary = None
+    extra_prompt = request.form.get("extra_prompt", "").strip()
+    
+    if extra_prompt:
+        try:
+            response = model.generate_content(contents=[extra_prompt])
+            summary = markdown.markdown(response.text)
+        except Exception as e:
+            summary = f"⚠️ CramPulse Engine Error: {str(e)}"
+            
+    return render_template_string(HTML_LAYOUT, summary=summary, user_question=extra_prompt)
+
+if __name__ == '__main__':
+    app.run(debug=True)
