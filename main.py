@@ -109,10 +109,9 @@ def index():
     
     if extra_prompt:
         try:
-            # Native raw HTTP network request directly to Groq API
             api_url = "https://groq.com"
             headers = {
-                "Authorization": f"Bearer {os.environ.get('GROQ_API_KEY')}",
+                "Authorization": f"Bearer {os.environ.get('GROQ_API_KEY', '').strip()}",
                 "Content-Type": "application/json"
             }
             json_payload = {
@@ -120,13 +119,16 @@ def index():
                 "messages": [{"role": "user", "content": extra_prompt}]
             }
             
-            # Using direct, basic Python requests communication channel
-            response = requests.post(api_url, json=json_payload, headers=headers)
-            response_data = response.json()
+            # Added a timeout and clean error collection checks
+            response = requests.post(api_url, json=json_payload, headers=headers, timeout=10)
             
-            raw_text = response_data["choices"][0]["message"]["content"]
-            summary = markdown.markdown(raw_text)
-            
+            if response.status_code == 200:
+                response_data = response.json()
+                raw_text = response_data["choices"][0]["message"]["content"]
+                summary = markdown.markdown(raw_text)
+            else:
+                summary = f"⚠️ Groq API Return Error (Status {response.status_code}): {response.text}"
+                
         except Exception as e:
             summary = f"⚠️ CramPulse Engine Error: {str(e)}"
             
