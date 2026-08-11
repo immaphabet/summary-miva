@@ -76,7 +76,8 @@ HTML_LAYOUT = """
             <div class="grok-disclosure-line">Developed by Emmanuel Olorunjuwonlo</div>
             <div class="console-pill">
                 <form method="POST" action="/" enctype="multipart/form-data" id="engine-form" style="margin:0; display:flex; flex-direction:column; gap:6px;">
-                    <div class="file-upload-row"><input type="file" name="slide_images" multiple accept="image/*" onchange="loadSlidesPreview(this)" required></div>
+                    <!-- REMOVED 'required' from file input so you can send pure text messages -->
+                    <div class="file-upload-row"><input type="file" name="slide_images" multiple accept="image/*" onchange="loadSlidesPreview(this)"></div>
                     <div class="input-text-group">
                         <textarea name="extra_prompt" id="user-input" placeholder="Ask CramPulse anything..." required></textarea>
                         <button type="submit" class="action-send-btn" onclick="indicateLoadingState()">&uarr;</button>
@@ -110,8 +111,7 @@ HTML_LAYOUT = """
         }
         function indicateLoadingState() {
             const textareaValue = document.getElementById("user-input").value;
-            const fileInput = document.querySelector('input[type="file"]').files;
-            if(textareaValue && fileInput.length > 0) {
+            if(textareaValue) {
                 const respBlock = document.getElementById("response-block");
                 if(respBlock.parentElement.className !== "summary-box") {
                     respBlock.outerHTML = '<div class="summary-box"><div class="ai-markdown-bubble" id="response-block">✨ CramPulse is analyzing your slide materials... compiling your custom briefing study notes now.</div></div>';
@@ -132,12 +132,15 @@ def index():
     slide_files = request.files.getlist("slide_images")
     extra_prompt = request.form.get("extra_prompt", "")
     gemini_payload = []
+    
+    # Process files if they exist
     for file in slide_files:
         if file and file.filename != '':
             file_data = base64.b64encode(file.read()).decode("utf-8")
             gemini_payload.append({"mime_type": file.content_type, "data": file_data})
+            
+    # Assembles final instruction based on whether images were attached or it is a text-only command
     if gemini_payload:
         base_instruction = f"Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details. Additional Note: {extra_prompt}" if extra_prompt else "Analyze these university lecture slides and extract a comprehensive, crisp exam-prep study briefing highlighting core vocabulary definitions and key details."
         gemini_payload.append(base_instruction)
-        response = model.generate_content(contents=gemini_payload)
-        summary = markdown.markdown(response.text)
+    elif extra_prompt:
