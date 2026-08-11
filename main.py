@@ -8,8 +8,7 @@ app = Flask(__name__)
 
 API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=API_KEY)
-# CORRECT MODEL ID: Matches the exact syntax expected by your SDK version
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
@@ -41,7 +40,11 @@ HTML_LAYOUT = """
         textarea { flex: 1; height: 44px; padding: 12px 4px 0 4px; border: none; background: transparent; color: #ffffff; resize: none; font-size: 15px; font-family: inherit; box-sizing: border-box; }
         textarea:focus { outline: none; }
         textarea::placeholder { color: #475569; }
-        .action-send-btn { width: 40px; height: 40px; background: #38bdf8; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #000000; font-weight: bold; font-size: 16px; flex-shrink: 0; }
+        
+        /* Updated Send Button to position and style the SVG vector icon nicely */
+        .action-send-btn { width: 40px; height: 40px; background: #38bdf8; border: none; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; color: #000000; flex-shrink: 0; padding-left: 4px; transition: background 0.2s ease; }
+        .action-send-btn:active { background: #0ea5e9; }
+        .action-send-btn svg { fill: #000000; width: 18px; height: 18px; }
     </style>
 </head>
 <body>
@@ -62,7 +65,12 @@ HTML_LAYOUT = """
                 <form method="POST" action="/" id="engine-form" style="margin:0; display:flex; flex-direction:column; gap:6px;">
                     <div class="input-text-group">
                         <textarea name="extra_prompt" id="user-input" placeholder="Ask CramPulse anything..." required></textarea>
-                        <button type="submit" class="action-send-btn">&uarr;</button>
+                        <button type="submit" class="action-send-btn">
+                            <!-- SVG vector icon matching the standard WhatsApp mobile send graphic -->
+                            <svg viewBox="0 0 24 24">
+                                <path d="M2,21L23,12L2,3V10L17,12L2,14V21Z" />
+                            </svg>
+                        </button>
                     </div>
                 </form>
             </div>
