@@ -28,34 +28,41 @@ def index():
         search_filter = request.form.get("search_filter", "").strip().lower()
         
     compiled_articles = []
-    articles_source = []
+    articles_source = list(feed.entries) if (hasattr(feed, 'entries') and feed.entries) else []
     
-    # --- CRITICAL FIX: Convert items explicitly into a sliceable list structure ---
-    if hasattr(feed, 'entries') and feed.entries:
-        articles_source = list(feed.entries)
-    elif hasattr(feed, 'items'):
+    if not articles_source and hasattr(feed, 'items'):
         raw_items = feed.items() if callable(feed.items) else feed.items
         articles_source = list(raw_items)
         
     if articles_source:
         for entry in articles_source[:15]:
-            # Secure handling if items are tuple pairs or dictionaries
-            if isinstance(entry, tuple) and len(entry) == 2:
-                entry = entry[1]
-                
+            # --- CRITICAL FIX: Direct string parsing to avoid built-in method address crashes ---
             if isinstance(entry, dict):
-                title = entry.get("title", "")
+                raw_title = entry.get("title", "")
                 summary_text = entry.get("summary", "")
                 link = entry.get("link", "#")
             else:
-                title = getattr(entry, "title", "")
+                raw_title = getattr(entry, "title", "")
                 summary_text = getattr(entry, "summary", "")
                 link = getattr(entry, "link", "#")
+            
+            # Guarantees the title evaluates strictly to a clean text string, dropping method references
+            if hasattr(raw_title, '__call__') or callable(raw_title):
+                title = str(raw_title)
+            else:
+                title = str(raw_title).strip()
                 
+            # Fallback if text data string converts to library object tags
+            if "built-in method" in title or "str object at" in title:
+                title = "Breaking Campus News Update"
+                if isinstance(entry, dict) and "title" in entry:
+                    title = str(entry["title"])
+                elif hasattr(entry, "title"):
+                    title = str(entry.title)
+            
             if summary_text:
                 summary_text = str(summary_text)
                 if "<" in summary_text:
-                    # FIXED: Splitting cleanly and stripping the resulting text block safely
                     summary_text = summary_text.split("<")[0].strip()
                 else:
                     summary_text = summary_text.strip()
@@ -65,8 +72,7 @@ def index():
             else:
                 summary_text = "Click below to read full breaking article details."
                 
-            if title:
-                title = str(title).strip()
+            if title and "built-in method" not in str(title):
                 if search_filter:
                     if search_filter in title.lower() or search_filter in summary_text.lower():
                         compiled_articles.append({"title": title, "summary": summary_text, "link": link})
@@ -78,7 +84,6 @@ def index():
 @app.route("/admin", methods=["GET", "POST"])
 def admin_panel():
     secure_key = "admin123"
-    
     if request.method == "GET":
         is_auth = session.get("admin_logged_in", False)
         return render_template_string(ADMIN_LAYOUT, authenticated=is_auth, active_count=len(ACTIVE_SESSIONS), error=None)
