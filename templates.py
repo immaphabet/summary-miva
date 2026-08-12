@@ -16,7 +16,6 @@ HTML_LAYOUT = """
         .publisher-title { font-size: 14px; font-weight: 700; color: #111827; margin: 0 0 4px 0; }
         .publisher-text { font-size: 12px; color: #4b5563; margin: 0; line-height: 1.5; }
         
-        /* News List Stream Container */
         .news-stream { width: 100%; display: flex; flex-direction: column; gap: 16px; padding-bottom: 140px; }
         
         .news-card { background: #ffffff; border: 1px solid #e5e7eb; padding: 20px; border-radius: 12px; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.02); }
@@ -28,10 +27,8 @@ HTML_LAYOUT = """
         .action-link:hover { text-decoration: underline; }
         .no-results { color: #6b7280; font-size: 14px; text-align: center; padding: 30px; width: 100%; }
         
-        /* FIXED: Static Credit Footer text placed right inside the scrolling list sequence */
         .static-footer-credit { width: 100%; padding: 20px 0; font-size: 11px; color: #9ca3af; text-align: center; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; border-top: 1px dashed #e5e7eb; margin-top: 10px; }
         
-        /* Clean Floating Input Search Bar Dock Layout with zero overlapping text elements */
         .search-dock { position: fixed; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, #ffffff 30%); padding: 25px 0; display: flex; flex-direction: column; align-items: center; z-index: 10; }
         .search-pill-bar { width: 92%; max-width: 600px; background: #ffffff; border: 2px solid #e5e7eb; border-radius: 30px; padding: 4px 6px 4px 16px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
         .search-pill-bar:focus-within { border-color: #dc2626; }
@@ -60,14 +57,14 @@ HTML_LAYOUT = """
             {% if articles %}
                 {% for item in articles %}
                 <div class="news-card">
-                    <div class="card-tag">Breaking News</div>
+                    <!-- UPDATED DYNAMIC SOURCE LABEL -->
+                    <div class="card-tag">{{ item.source if item.source else "Breaking News" }}</div>
                     <div class="card-title">{{ item.title }}</div>
                     <div class="card-excerpt">{{ item.summary }}</div>
                     <a href="{{ item.link }}" target="_blank" class="action-link">Read Full Story &rarr;</a>
                 </div>
                 {% endfor %}
                 
-                <!-- Your name sits cleanly here at the end of the scroll stream, out of the way! -->
                 <div class="static-footer-credit">Developed by Emmanuel Olorunjuwonlo</div>
             {% else %}
                 <div class="no-results">No breaking headlines found matching your search keyword context filter.</div>
