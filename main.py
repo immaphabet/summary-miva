@@ -11,11 +11,12 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "gistpulse_secure_session_ke
 
 ACTIVE_SESSIONS = {}
 
+# --- SYSTEM MEMORY CACHE ---
 NEWS_CACHE = {
     "articles": [],
     "last_updated": 0
 }
-CACHE_DURATION_SECONDS = 900  # 15 minutes
+CACHE_DURATION_SECONDS = 900  # 15 minutes (15 * 60)
 
 def log_user_session():
     if "user_uuid" not in session:
@@ -35,10 +36,12 @@ def scrape_myschool(headers):
                 title = " ".join(element.get_text().split()).strip()
                 if len(title) < 15 or "Simulator" in title:
                     continue
-                parent_a = element.find_parent("a") or element.find("a")
+                
                 link = url
+                parent_a = element.find_parent("a") or element.find("a")
                 if parent_a and parent_a.has_attr("href"):
                     link = parent_a["href"] if parent_a["href"].startswith("http") else f"{url}{parent_a['href']}"
+                
                 articles.append({
                     "title": title,
                     "summary": "Click to view full admission schedules, past questions updates, and cutoff announcements.",
@@ -46,10 +49,10 @@ def scrape_myschool(headers):
                     "source": "Myschool Portal"
                 })
     except Exception as e:
-        print(f"Myschool Error: {e}")
+        print(f"Myschool Scraper Error: {e}")
     return articles
 
-# --- SOURCE 2: PULSE NIGERIA ---
+# --- SOURCE 2: PULSE NIGERIA CAMPUS ---
 def scrape_pulse_nigeria(headers):
     articles = []
     url = "https://pulse.ng"
@@ -59,8 +62,11 @@ def scrape_pulse_nigeria(headers):
             soup = BeautifulSoup(response.text, "html.parser")
             for card in soup.find_all("a")[:35]:
                 title = " ".join(card.get_text().split()).strip()
-                if len(title) < 25 or not card.has_attr("href") or "Pulse" in title or "Terms" in title:
+                if len(title) < 25 or not card.has_attr("href"):
                     continue
+                if "Pulse" in title or "Terms" in title:
+                    continue
+                
                 link = card["href"] if card["href"].startswith("http") else f"https://pulse.ng{card['href']}"
                 articles.append({
                     "title": title,
@@ -69,10 +75,10 @@ def scrape_pulse_nigeria(headers):
                     "source": "Pulse Campus"
                 })
     except Exception as e:
-        print(f"Pulse Error: {e}")
+        print(f"Pulse Scraper Error: {e}")
     return articles
 
-# --- SOURCE 3: PUNCH EDUCATION ---
+# --- SOURCE 3: PUNCH EDUCATION NEWS ---
 def scrape_punch_edu(headers):
     articles = []
     url = "https://punchng.com"
@@ -84,17 +90,18 @@ def scrape_punch_edu(headers):
                 card_a = item.find("a")
                 if card_a and card_a.has_attr("href"):
                     title = " ".join(card_a.get_text().split()).strip()
+                    link = card_a["href"]
                     articles.append({
                         "title": title,
                         "summary": "Click to monitor institutional board decisions, ASUU/NUC policies, and national educational directives.",
-                        "link": card_a["href"],
+                        "link": link,
                         "source": "Punch Education"
                     })
     except Exception as e:
-        print(f"Punch Error: {e}")
+        print(f"Punch Scraper Error: {e}")
     return articles
 
-# --- SOURCE 4: JAMB OFFICIAL ---
+# --- SOURCE 4: OFFICIAL JAMB BOARD REFORMS ---
 def scrape_jamb_bulletin(headers):
     articles = []
     url = "https://jamb.gov.ng"
@@ -106,20 +113,22 @@ def scrape_jamb_bulletin(headers):
                 title = " ".join(row.get_text().split()).strip()
                 if len(title) < 20:
                     continue
+                
                 link = url if not row.has_attr("href") else row["href"]
                 if not link.startswith("http"):
                     link = f"https://jamb.gov.ng{link}"
+                    
                 articles.append({
                     "title": title,
-                    "summary": "Click to verify official Joint Admissions and Matriculation Board (JAMB) regular statements and guidelines.",
+                    "summary": "Click to verify official Joint Admissions and Matriculation Board (JAMB) regular statements, guidelines, and directives.",
                     "link": link,
                     "source": "JAMB Official"
                 })
     except Exception as e:
-        print(f"JAMB Error: {e}")
+        print(f"JAMB Portal Scraper Error: {e}")
     return articles
 
-# --- NEW SOURCE 5: PREMIUM TIMES EDUCATION (HIGH VOLUME) ---
+# --- SOURCE 5: PREMIUM TIMES EDUCATION ---
 def scrape_premium_times(headers):
     articles = []
     url = "https://premiumtimesng.com"
@@ -127,7 +136,6 @@ def scrape_premium_times(headers):
         response = requests.get(url, headers=headers, timeout=8)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-            # Premium Times lists story headers inside h3 tags with specific classes
             for header in soup.find_all("h3", class_="a-story-title")[:15]:
                 card_a = header.find("a")
                 if card_a and card_a.has_attr("href"):
@@ -139,10 +147,10 @@ def scrape_premium_times(headers):
                         "source": "Premium Times"
                     })
     except Exception as e:
-        print(f"Premium Times Error: {e}")
+        print(f"Premium Times Scraper Error: {e}")
     return articles
 
-# --- NEW SOURCE 6: VANGUARD NEWS EDUCATION (HIGH VOLUME) ---
+# --- SOURCE 6: VANGUARD NEWS EDUCATION ---
 def scrape_vanguard_edu(headers):
     articles = []
     url = "https://vanguardngr.com"
@@ -161,7 +169,7 @@ def scrape_vanguard_edu(headers):
                         "source": "Vanguard Edu"
                     })
     except Exception as e:
-        print(f"Vanguard Error: {e}")
+        print(f"Vanguard Scraper Error: {e}")
     return articles
 
 @app.route("/", methods=["GET", "POST"])
@@ -169,16 +177,17 @@ def index():
     log_user_session()
     current_time = time.time()
     
-    search_filter = ""
-    if request.method == "POST":
-        search_filter = request.form.get("search_filter", "").strip().lower()
+    # Extract search filter and convert to lowercase safely
+    search_filter = request.form.get("search_filter", "")
+    if search_filter:
+        search_filter = str(search_filter).strip().lower()
         
     shared_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
     
-    # Refresh cache if empty or expired
-    if not NEWS_CACHE["articles"] or (current_time - NEWS_CACHE["last_updated"] > CACHE_DURATION_SECONDS):
+    # Core system storage cache check engine rules
+    if not NEWS_CACHE["articles"] or len(NEWS_CACHE["articles"]) < 5 or (current_time - NEWS_CACHE["last_updated"] > CACHE_DURATION_SECONDS):
         all_articles = []
         all_articles.extend(scrape_jamb_bulletin(shared_headers))
         all_articles.extend(scrape_myschool(shared_headers))
@@ -187,7 +196,7 @@ def index():
         all_articles.extend(scrape_premium_times(shared_headers))
         all_articles.extend(scrape_vanguard_edu(shared_headers))
         
-        # Title deduplication
+        # Eliminate structural duplicate headlines entries
         seen_titles = set()
         unique_articles = []
         for a in all_articles:
@@ -200,11 +209,16 @@ def index():
         
     cached_pool = NEWS_CACHE["articles"]
     
+    # CASE-INSENSITIVE COMPARISON FILTER
     compiled_articles = []
     for art in cached_pool:
         if search_filter:
-            # Matches against the title text OR the name of the source platform
-            if search_filter in art["title"].lower() or search_filter in art["source"].lower():
+            title_lower = str(art.get("title", "")).lower()
+            source_lower = str(art.get("source", "")).lower()
+            summary_lower = str(art.get("summary", "")).lower()
+            
+            # Cross-reference search term across title, source, or text context
+            if (search_filter in title_lower) or (search_filter in source_lower) or (search_filter in summary_lower):
                 compiled_articles.append(art)
         else:
             compiled_articles.append(art)
@@ -220,11 +234,4 @@ def admin_panel():
         
     password_input = request.form.get("admin_password", "")
     if password_input == secure_key:
-        session["admin_logged_in"] = True
-        return render_template_string(ADMIN_LAYOUT, authenticated=True, active_count=len(ACTIVE_SESSIONS), error=None)
-    else:
-        return render_template_string(ADMIN_LAYOUT, authenticated=False, error="Invalid authentication key. Identity validation rejected.")
-
-if __name__ == '__main__':
-    app.run(debug=True)
-    
+        
