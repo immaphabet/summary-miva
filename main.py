@@ -1,8 +1,8 @@
 import os
 import uuid
-import feedparser
+import requests
+from bs4 import BeautifulSoup
 from flask import Flask, render_template_string, request, session
-import markdown
 from templates import HTML_LAYOUT, ADMIN_LAYOUT
 
 app = Flask(__name__)
@@ -20,64 +20,58 @@ def log_user_session():
 def index():
     log_user_session()
     
-    rss_url = "https://myschool.ng"
-    feed = feedparser.parse(rss_url)
-    
     search_filter = ""
     if request.method == "POST":
         search_filter = request.form.get("search_filter", "").strip().lower()
         
     compiled_articles = []
-    articles_source = list(feed.entries) if (hasattr(feed, 'entries') and feed.entries) else []
     
-    if not articles_source and hasattr(feed, 'items'):
-        raw_items = feed.items() if callable(feed.items) else feed.items
-        articles_source = list(raw_items)
-        
-    if articles_source:
-        for entry in articles_source[:15]:
-            # --- CRITICAL FIX: Direct string parsing to avoid built-in method address crashes ---
-            if isinstance(entry, dict):
-                raw_title = entry.get("title", "")
-                summary_text = entry.get("summary", "")
-                link = entry.get("link", "#")
-            else:
-                raw_title = getattr(entry, "title", "")
-                summary_text = getattr(entry, "summary", "")
-                link = getattr(entry, "link", "#")
+    # Target URL and a solid user-agent to bypass basic cloud anti-bot filters
+    url = "https://myschool.ng"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    
+    try:
+        # Fetch the HTML instead of feed parsing
+        response = requests.get(url, headers=headers, timeout=12)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
             
-            # Guarantees the title evaluates strictly to a clean text string, dropping method references
-            if hasattr(raw_title, '__call__') or callable(raw_title):
-                title = str(raw_title)
-            else:
-                title = str(raw_title).strip()
-                
-            # Fallback if text data string converts to library object tags
-            if "built-in method" in title or "str object at" in title:
-                title = "Breaking Campus News Update"
-                if isinstance(entry, dict) and "title" in entry:
-                    title = str(entry["title"])
-                elif hasattr(entry, "title"):
-                    title = str(entry.title)
+            # Myschool structures headlines inside <h4> text tags
+            news_elements = soup.find_all("h4")
             
-            if summary_text:
-                summary_text = str(summary_text)
-                if "<" in summary_text:
-                    summary_text = summary_text.split("<")[0].strip()
-                else:
-                    summary_text = summary_text.strip()
-                    
-                if len(summary_text) > 170:
-                    summary_text = summary_text[:167] + "..."
-            else:
-                summary_text = "Click below to read full breaking article details."
+            for element in news_elements:
+                title = element.get_text().strip()
+                title = " ".join(title.split())  # Clean whitespaces
                 
-            if title and "built-in method" not in str(title):
+                # Filters out generic short strings, buttons, or blank headers
+                if len(title) < 16 or "Simulator" in title or "CBT" in title:
+                    continue
+                
+                # Default fallback summary string
+                summary_text = "Click below to read full breaking campus details, instructions, and community comment feeds."
+                
+                # Try to pull the link from an wrapping <a> tag or nearby parent element
+                link = url
+                parent_a = element.find_parent("a") or element.find("a")
+                if parent_a and parent_a.has_attr("href"):
+                    link = parent_a["href"]
+                    if not link.startswith("http"):
+                        link = f"{url}{link}"
+                
+                # Match against search queries if the student used the filter bar
                 if search_filter:
-                    if search_filter in title.lower() or search_filter in summary_text.lower():
+                    if search_filter in title.lower():
                         compiled_articles.append({"title": title, "summary": summary_text, "link": link})
                 else:
                     compiled_articles.append({"title": title, "summary": summary_text, "link": link})
+                    
+                # Cap the maximum returned homepage stories stream to 15 items
+                if len(compiled_articles) >= 15:
+                    break
+    except Exception as e:
+        print(f"Scraper Engine Error: {e}")
                 
     return render_template_string(HTML_LAYOUT, articles=compiled_articles)
 
@@ -97,4 +91,4 @@ def admin_panel():
 
 if __name__ == '__main__':
     app.run(debug=True)
-                
+                        
