@@ -16,6 +16,59 @@ def log_user_session():
     user_agent = request.headers.get('User-Agent', 'Unknown Device')
     ACTIVE_SESSIONS[session["user_uuid"]] = user_agent
 
+# --- SCRAPER 1: MYSCHOOL.NG ---
+def scrape_myschool(headers):
+    articles = []
+    url = "https://myschool.ng"
+    try:
+        response = requests.get(url, headers=headers, timeout=8)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            for element in soup.find_all("h4")[:15]:
+                title = " ".join(element.get_text().split()).strip()
+                if len(title) < 15 or "Simulator" in title:
+                    continue
+                
+                link = url
+                parent_a = element.find_parent("a") or element.find("a")
+                if parent_a and parent_a.has_attr("href"):
+                    link = parent_a["href"] if parent_a["href"].startswith("http") else f"{url}{parent_a['href']}"
+                
+                articles.append({
+                    "title": title,
+                    "summary": "Click to view full admission schedules, past questions updates, and cutoff announcements.",
+                    "link": link,
+                    "source": "Myschool Portal"
+                })
+    except Exception as e:
+        print(f"Myschool Scraper Error: {e}")
+    return articles
+
+# --- SCRAPER 2: PULSE NIGERIA CAMPUS ---
+def scrape_pulse_nigeria(headers):
+    articles = []
+    url = "https://pulse.ng"
+    try:
+        response = requests.get(url, headers=headers, timeout=8)
+        if response.status_code == 200:
+            soup = BeautifulSoup(response.text, "html.parser")
+            # Pulse uses custom anchor classes for headings
+            for card in soup.find_all("a", class_="card-title-link")[:10]:
+                title = " ".join(card.get_text().split()).strip()
+                if len(title) < 15:
+                    continue
+                
+                link = card["href"] if card["href"].startswith("http") else f"https://pulse.ng{card['href']}"
+                articles.append({
+                    "title": title,
+                    "summary": "Click to read trending Nigerian student lifestyle trends, university gists, and entertainment news.",
+                    "link": link,
+                    "source": "Pulse Campus"
+                })
+    except Exception as e:
+        print(f"Pulse Scraper Error: {e}")
+    return articles
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     log_user_session()
@@ -24,56 +77,33 @@ def index():
     if request.method == "POST":
         search_filter = request.form.get("search_filter", "").strip().lower()
         
-    compiled_articles = []
-    
-    # Target URL and a solid user-agent to bypass basic cloud anti-bot filters
-    url = "https://myschool.ng"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    shared_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     
-    try:
-        # Fetch the HTML instead of feed parsing
-        response = requests.get(url, headers=headers, timeout=12)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, "html.parser")
+    # Run all scrapers and combine results into one pool
+    all_articles = []
+    all_articles.extend(scrape_myschool(shared_headers))
+    all_articles.extend(scrape_pulse_nigeria(shared_headers))
+    
+    # Filter by user keyword if provided
+    compiled_articles = []
+    for art in all_articles:
+        if search_filter:
+            if search_filter in art["title"].lower() or search_filter in art["source"].lower():
+                compiled_articles.append(art)
+        else:
+            compiled_articles.append(art)
             
-            # Myschool structures headlines inside <h4> text tags
-            news_elements = soup.find_all("h4")
+    # Deduplicate matching titles
+    seen = set()
+    unique_articles = []
+    for a in compiled_articles:
+        if a["title"] not in seen:
+            seen.add(a["title"])
+            unique_articles.append(a)
             
-            for element in news_elements:
-                title = element.get_text().strip()
-                title = " ".join(title.split())  # Clean whitespaces
-                
-                # Filters out generic short strings, buttons, or blank headers
-                if len(title) < 16 or "Simulator" in title or "CBT" in title:
-                    continue
-                
-                # Default fallback summary string
-                summary_text = "Click below to read full breaking campus details, instructions, and community comment feeds."
-                
-                # Try to pull the link from an wrapping <a> tag or nearby parent element
-                link = url
-                parent_a = element.find_parent("a") or element.find("a")
-                if parent_a and parent_a.has_attr("href"):
-                    link = parent_a["href"]
-                    if not link.startswith("http"):
-                        link = f"{url}{link}"
-                
-                # Match against search queries if the student used the filter bar
-                if search_filter:
-                    if search_filter in title.lower():
-                        compiled_articles.append({"title": title, "summary": summary_text, "link": link})
-                else:
-                    compiled_articles.append({"title": title, "summary": summary_text, "link": link})
-                    
-                # Cap the maximum returned homepage stories stream to 15 items
-                if len(compiled_articles) >= 15:
-                    break
-    except Exception as e:
-        print(f"Scraper Engine Error: {e}")
-                
-    return render_template_string(HTML_LAYOUT, articles=compiled_articles)
+    return render_template_string(HTML_LAYOUT, articles=unique_articles[:35])
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin_panel():
@@ -91,4 +121,3 @@ def admin_panel():
 
 if __name__ == '__main__':
     app.run(debug=True)
-                        
