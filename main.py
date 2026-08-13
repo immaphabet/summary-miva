@@ -3,7 +3,7 @@ import uuid
 import time
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, render_template_string, request, session
+from flask import Flask, render_template_string, request, session, make_response
 from templates import HTML_LAYOUT, ADMIN_LAYOUT
 
 app = Flask(__name__)
@@ -16,7 +16,8 @@ NEWS_CACHE = {
     "articles": [],
     "last_updated": 0
 }
-CACHE_DURATION_SECONDS = 300  # Dropped to 5 minutes for rapid dynamic loops
+# Cut cache timing entirely to 60 seconds for debugging live updates
+CACHE_DURATION_SECONDS = 60
 
 def log_user_session():
     if "user_uuid" not in session:
@@ -27,7 +28,6 @@ def log_user_session():
 def parse_rss_feed(url, source_name, summary_text, headers):
     articles = []
     try:
-        # Pinging raw data feeds bypasses heavy dynamic JavaScript blocks completely
         response = requests.get(url, headers=headers, timeout=8)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "xml")
@@ -51,7 +51,6 @@ def parse_rss_feed(url, source_name, summary_text, headers):
     return articles
 
 def scrape_jamb_bulletin(headers):
-    # Fallback to standard tracking due to secure localized network portals
     articles = []
     url = "https://jamb.gov.ng"
     try:
@@ -108,10 +107,11 @@ def index():
     }
     
     time_diff = current_time - NEWS_CACHE["last_updated"]
-    if not NEWS_CACHE["articles"] or len(NEWS_CACHE["articles"]) < 5 or time_diff > CACHE_DURATION_SECONDS:
+    
+    # FORCE NEW INSTANCE RUN: Completely wipe list array to block loop persistence
+    if not NEWS_CACHE["articles"] or time_diff > CACHE_DURATION_SECONDS:
         all_articles = []
         
-        # Scrape general feeds directly using rapid XML loops
         all_articles.extend(scrape_jamb_bulletin(shared_headers))
         all_articles.extend(scrape_myschool(shared_headers))
         
@@ -163,7 +163,14 @@ def index():
         else:
             compiled_articles.append(art)
             
-    return render_template_string(HTML_LAYOUT, articles=compiled_articles)
+    # CRITICAL FIX: Explicitly disable device layout browser caches
+    rendered_content = render_template_string(HTML_LAYOUT, articles=compiled_articles)
+    response = make_response(rendered_content)
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    
+    return response
 
 @app.route("/admin", methods=["GET", "POST"])
 def admin():
@@ -187,4 +194,4 @@ def admin():
 
 if __name__ == "__main__":
     app.run(debug=True)
-        
+    
