@@ -3,11 +3,13 @@ import uuid
 import time
 import requests
 from bs4 import BeautifulSoup
-from flask import Flask, render_template_string, request, session
+from flask import Flask, render_template_string, request, session, redirect, url_for
 from templates import HTML_LAYOUT, ADMIN_LAYOUT
 
 app = Flask(__name__)
+# Secure secret session key
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "gistpulse_secure_session_key_2026")
+ADMIN_KEY = os.environ.get("GISTPULSE_ADMIN_KEY", "pulse2026")
 
 ACTIVE_SESSIONS = {}
 
@@ -15,7 +17,8 @@ NEWS_CACHE = {
     "articles": [],
     "last_updated": 0
 }
-CACHE_DURATION_SECONDS = 900
+# 10 minutes cache duration to keep things fresh
+CACHE_DURATION_SECONDS = 600
 
 def log_user_session():
     if "user_uuid" not in session:
@@ -77,14 +80,17 @@ def scrape_punch_edu(headers):
         response = requests.get(url, headers=headers, timeout=8)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-            for item in soup.find_all("h2", class_="post-title")[:15]:
-                card_a = item.find("a")
+            headers_list = soup.find_all("h2") + soup.find_all("h2", class_="post-title")
+            for item in headers_list[:15]:
+                card_a = item.find("a") or (item if item.name == "a" else None)
                 if card_a and card_a.has_attr("href"):
                     title = " ".join(card_a.get_text().split()).strip()
+                    if len(title) < 20:
+                        continue
                     articles.append({
                         "title": title,
                         "summary": "Click to monitor institutional board decisions, ASUU/NUC policies, and national educational directives.",
-                        "link": card_a["href"],
+                        "link": card_a["href"] if card_a["href"].startswith("http") else f"https://punchng.com{card_a['href']}",
                         "source": "Punch Education"
                     })
     except Exception as e:
@@ -98,13 +104,14 @@ def scrape_jamb_bulletin(headers):
         response = requests.get(url, headers=headers, timeout=8)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-            for row in soup.find_all(["h3", "h2", "a"])[:40]:
+            for row in soup.find_all(["h5", "h3", "h2"])[:25]:
                 title = " ".join(row.get_text().split()).strip()
-                if len(title) < 20:
+                if len(title) < 20 or "slide" in title.lower():
                     continue
-                link = url if not row.has_attr("href") else row["href"]
-                if not link.startswith("http"):
-                    link = f"https://jamb.gov.ng{link}"
+                link = url
+                card_a = row.find("a") or row.find_parent("a")
+                if card_a and card_a.has_attr("href"):
+                    link = card_a["href"] if card_a["href"].startswith("http") else f"https://jamb.gov.ng{card_a['href']}"
                 articles.append({
                     "title": title,
                     "summary": "Click to verify official Joint Admissions and Matriculation Board (JAMB) regular statements and guidelines.",
@@ -122,14 +129,16 @@ def scrape_premium_times(headers):
         response = requests.get(url, headers=headers, timeout=8)
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, "html.parser")
-            for header in soup.find_all("h3", class_="a-story-title")[:15]:
-                card_a = header.find("a")
+            for header in soup.find_all("h3")[:20]:
+                card_a = header.find("a") or (header if header.name == "a" else None)
                 if card_a and card_a.has_attr("href"):
                     title = " ".join(card_a.get_text().split()).strip()
+                    if len(title) < 20 or "click" in title.lower():
+                        continue
                     articles.append({
                         "title": title,
                         "summary": "Click to read investigative education reports, university admission breakdowns, and structural policy updates.",
-                        "link": card_a["href"],
+                        "link": card_a["href"] if card_a["href"].startswith("http") else f"https://premiumtimesng.com{card_a['href']}",
                         "source": "Premium Times"
                     })
     except Exception as e:
@@ -161,13 +170,15 @@ def scrape_vanguard_edu(headers):
 def index():
     log_user_session()
     current_time = time.time()
-    search_filter = request.form.get("search_filter", "")
-    if search_filter:
-        search_filter = str(search_filter).strip().lower()
+    search_filter = request.form.get("search_filter", "").strip().lower()
+    
     shared_headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     }
-    if not NEWS_CACHE["articles"] or len(NEWS_CACHE["articles"]) < 5 or (current_time - NEWS_CACHE["last_updated"] > CACHE_DURATION_SECONDS):
+    
+    # Check cache age or if an explicit reload is needed
+    time_diff = current_time - NEWS_CACHE["last_updated"]
+    if not NEWS_CACHE["articles"] or len(NEWS_CACHE["articles"]) < 5 or time_diff > CACHE_DURATION_SECONDS:
         all_articles = []
         all_articles.extend(scrape_jamb_bulletin(shared_headers))
         all_articles.extend(scrape_myschool(shared_headers))
@@ -175,40 +186,50 @@ def index():
         all_articles.extend(scrape_pulse_nigeria(shared_headers))
         all_articles.extend(scrape_premium_times(shared_headers))
         all_articles.extend(scrape_vanguard_edu(shared_headers))
+        
         seen_titles = set()
         unique_articles = []
         for a in all_articles:
-            if a["title"].lower() not in seen_titles:
-                seen_titles.add(a["title"].lower())
+            norm_title = a["title"].lower().strip()
+            if norm_title not in seen_titles:
+                seen_titles.add(norm_title)
                 unique_articles.append(a)
+                
         NEWS_CACHE["articles"] = unique_articles
         NEWS_CACHE["last_updated"] = current_time
+
     cached_pool = NEWS_CACHE["articles"]
     compiled_articles = []
+    
     for art in cached_pool:
         if search_filter:
             title_lower = str(art.get("title", "")).lower()
             source_lower = str(art.get("source", "")).lower()
-            summary_lower = str(art.get("summary", "")).lower()
-            if (search_filter in title_lower) or (search_filter in source_lower) or (search_filter in summary_lower):
+            if search_filter in title_lower or search_filter in source_lower:
                 compiled_articles.append(art)
         else:
             compiled_articles.append(art)
-    return render_template_string(HTML_LAYOUT, articles=compiled_articles[:50])
+            
+    return render_template_string(HTML_LAYOUT, articles=compiled_articles)
 
+# NEW: The Admin Console Engine linking to your ADMIN_LAYOUT template
 @app.route("/admin", methods=["GET", "POST"])
-def admin_panel():
-    secure_key = "admin123"
-    if request.method == "GET":
-        is_auth = session.get("admin_logged_in", False)
-        return render_template_string(ADMIN_LAYOUT, authenticated=is_auth, active_count=len(ACTIVE_SESSIONS), error=None)
-    password_input = request.form.get("admin_password", "")
-    if password_input == secure_key:
-        session["admin_logged_in"] = True
-        return render_template_string(ADMIN_LAYOUT, authenticated=True, active_count=len(ACTIVE_SESSIONS), error=None)
-    else:
-        return render_template_string(ADMIN_LAYOUT, authenticated=False, error="Invalid authentication key. Identity validation rejected.")
+def admin():
+    error = None
+    if request.method == "POST":
+        input_password = request.form.get("admin_password")
+        if input_password == ADMIN_KEY:
+            session["authenticated"] = True
+        else:
+            error = "Invalid Administrator Access Key Context."
+            
+    authenticated = session.get("authenticated", False)
+    active_count = len(ACTIVE_SESSIONS)
+    
+    return render_template_string(
+        ADMIN_LAYOUT, 
+        authenticated=authenticated, 
+        active_count=active_count, 
+        error=error
+    )
 
-if __name__ == '__main__':
-    app.run(debug=True)
-                    
